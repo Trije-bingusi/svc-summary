@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: Lecture Summary Service
+  version: 1.0.0
+  description: Service that generates and stores concise lecture summaries.
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+  /readyz:
+    get:
+      summary: Readiness probe
+      responses:
+        '200': { description: READY }
+        '500': { description: NOT READY }
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Metrics text exposition
+          content:
+            text/plain:
+              schema:
+                type: string
+  /docs/summary/openapi.json:
+    get:
+      summary: OpenAPI JSON for docs UI
+      responses:
+        '200':
+          description: OpenAPI document
+          content:
+            application/json:
+              schema:
+                type: object
+  /docs/summary:
+    get:
+      summary: Documentation UI
+      responses:
+        '200':
+          description: Documentation UI (HTML)
+          content:
+            text/html:
+              schema:
+                type: string
+  /api/lectures/{lectureId}/summary:
+    get:
+      summary: Retrieve latest summary for a lecture
+      parameters:
+        - in: path
+          name: lectureId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Summary retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: string
+        '404':
+          description: Summary not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+    post:
+      summary: Start generation of a summary for a lecture
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transcription]
+              properties:
+                transcription:
+                  type: string
+      responses:
+        '202':
+          description: Accepted — generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Summary generation started
+        '400':
+          description: Bad request (missing transcription)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+components: {}

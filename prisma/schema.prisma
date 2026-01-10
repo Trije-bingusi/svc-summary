@@ -1,0 +1,16 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Summary {
+  id String @id @default(uuid()) @db.Uuid
+  lecture_id String @db.Uuid
+  summary_text String @db.Text
+  timestamp DateTime @default(now())
+}
