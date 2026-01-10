@@ -31,7 +31,7 @@ services:
   api:
     build: .
     # once the image has been pushed to ACR, you can use the option below
-    # image: rsobingusi.azurecr.io/svc-courses:dev
+    # image: rsobingusi.azurecr.io/svc-summary:dev
     restart: unless-stopped
     command: sh -c "npm run prisma:generate && npx prisma migrate deploy && npm start"
     healthcheck:
