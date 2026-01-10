@@ -91,11 +91,30 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [transcription]
-              properties:
-                transcription:
-                  type: string
+              oneOf:
+                - type: object
+                  required: [transcription]
+                  properties:
+                    transcription:
+                      type: string
+                      description: Raw transcription text to summarize.
+                - type: object
+                  required: [transcriptionJsonUrl]
+                  properties:
+                    transcriptionJsonUrl:
+                      type: string
+                      format: uri
+                      description: URL pointing to a JSON file containing the transcription (service will fetch this URL).
+              description: Provide either raw `transcription` text or a `transcriptionJsonUrl` to a JSON file containing the transcription.
+            examples:
+              transcriptionExample:
+                summary: Raw transcription
+                value:
+                  transcription: "Lecture on probability theory..."
+              transcriptionUrlExample:
+                summary: Transcription JSON URL
+                value:
+                  transcriptionJsonUrl: "https://example.com/transcriptions/lecture-123.json"
       responses:
         '202':
           description: Accepted — generation started

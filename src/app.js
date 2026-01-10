@@ -5,32 +5,9 @@ import { PrismaClient } from "@prisma/client";
 import { apiReference } from "@scalar/express-api-reference";
 import { logger, httpLogger } from "./logging.js";
 
-function env(name, fallback) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === null || raw === "") {
-    if (fallback === undefined) {
-      throw new Error(`Missing env: ${name}`);
-    }
-    return fallback;
-  }
-  return raw;
-}
+import { PORT, DATABASE_URL } from "./config.js";
+import { generateSummary } from "./summary.js";
 
-const PORT = Number(env("PORT", "3000"));
-const DATABASE_URL = env(
-  "DATABASE_URL",
-  "postgres://postgres:postgres@localhost:5432/summary"
-);
-
-const HUGGINGFACE_TOKEN = env("HUGGINGFACE_TOKEN");
-const HUGGINGFACE_MODEL = env("HUGGINGFACE_MODEL", "openai/gpt-oss-120b");
-const HUGGINGFACE_API_URL = env("HUGGINGFACE_API_URL", "https://router.huggingface.co/v1/chat/completions");
-
-const SUMMARIZATION_PROMPT = (
-   "You are a helpful assistant that creates a description for lectures in " +
-   "arbitrary languages. The output language should match the input. The " +
-   "description should be concise, with only a few sentences."
-)
 
 const prisma = new PrismaClient();
 
@@ -91,38 +68,7 @@ app.get("/api/lectures/:lectureId/summary", async (req, res) => {
   }
 });
 
-async function generateSummary(transcription) {
-  const response = await fetch(HUGGINGFACE_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${HUGGINGFACE_TOKEN}`,
-    },
-    body: JSON.stringify({
-      model: HUGGINGFACE_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: SUMMARIZATION_PROMPT
-        },
-        {
-          role: "user",
-          content: transcription
-        }
-      ]
-    }),
-  })
-
-  if (!response.ok) {
-    logger.error(`Hugging Face API error: ${response.status} ${response.statusText}`);
-    throw new Error(`Hugging Face API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const summary = data.choices[0].message.content;
-  return summary;
-}
-
+// Saves generated summary to the database
 async function saveSummary(lectureId, summaryText) {
   await prisma.summary.create({
     data: {
@@ -132,26 +78,47 @@ async function saveSummary(lectureId, summaryText) {
   });
 }
 
-async function generateAndSaveSummary(lectureId, transcription) {
-  try {
-    const summaryText = await generateSummary(transcription);
-    await saveSummary(lectureId, summaryText);
-  } catch (error) {
-    logger.error(error, `Failed to generate or save summary for lecture ${lectureId}`);
+/**
+ * Fetches and retrieves transcription text from a given JSON URL. The 
+ * JSON is expected to be an array of objects with a 'text' field. These
+ * text fields are concatenated into a single transcription string.
+ * @param {string} jsonUrl 
+ */
+async function retrieveJsonTranscription(jsonUrl) {
+  const response = await fetch(jsonUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch transcription JSON: ${response.status} ${response.statusText}`);
   }
+
+  const data = await response.json();
+  const lines = data.map(entry => entry.text);
+  return lines.join("\n");  
 }
 
 // Starts generation of summary for a given lecture transcription
 app.post("/api/lectures/:lectureId/summary", async (req, res) => {
   const { lectureId } = req.params;
-  const { transcription } = req.body;
+  let { transcription, transcriptionJsonUrl } = req.body;
 
-  if (!transcription) {
-    return res.status(400).json({ error: "Missing transcription in request body" });
+  if (!transcription && !transcriptionJsonUrl) {
+    return res.status(400).json({ error: "Missing transcription or transcriptionJsonUrl in request body" });
   }
 
-  logger.info(`Generating summary for lecture ${lectureId}`);
-  setImmediate(async () => await generateAndSaveSummary(lectureId, transcription));
+  setImmediate(async () => {
+    try {
+      if (!transcription) {
+        req.log.info(`Fetching transcription JSON from ${transcriptionJsonUrl}`);
+        transcription = await retrieveJsonTranscription(transcriptionJsonUrl);
+      }
+
+      logger.info(`Generating summary for lecture ${lectureId}`);
+      const summaryText = await generateSummary(transcription);
+      logger.info(`Saving summary for lecture ${lectureId}`);
+      await saveSummary(lectureId, summaryText);
+    } catch (error) {
+      logger.error(error, `Failed to generate or save summary for lecture ${lectureId}`);
+    }
+  });
   res.status(202).json({ message: "Summary generation started" });
 });
 
