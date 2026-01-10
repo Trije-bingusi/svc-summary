@@ -1,0 +1,23 @@
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# per-folder envs
+scripts/**/azure.env
+scripts/**/aks.env
+scripts/**/db.env
+scripts/**/.env
+
+# IDEs and editors
+.vscode/
+
+# Prisma
+/generated/prisma
