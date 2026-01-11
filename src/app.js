@@ -4,6 +4,7 @@ import YAML from "yamljs";
 import { PrismaClient } from "@prisma/client";
 import { apiReference } from "@scalar/express-api-reference";
 import { logger, httpLogger } from "./logging.js";
+import { subscribeJson } from "./mq.js";
 
 import { PORT, DATABASE_URL } from "./config.js";
 import { generateSummary } from "./summary.js";
@@ -121,6 +122,23 @@ app.post("/api/lectures/:lectureId/summary", async (req, res) => {
   });
   res.status(202).json({ message: "Summary generation started" });
 });
+
+// Generate summary automatically when transcription is completed (via NATS message)
+subscribeJson("transcriptions.completed", async (data) => {
+  try {
+    const lectureId = data.lecture_id;
+    const transcriptionJsonUrl = data.transcription_json_url;
+    logger.info(`Received transcription completed message for lecture ${lectureId}`);
+
+    const transcription = await retrieveJsonTranscription(transcriptionJsonUrl);
+    const summaryText = await generateSummary(transcription);
+    await saveSummary(lectureId, summaryText);
+    logger.info(`Summary generated and saved for lecture ${lectureId}`);
+  } catch (error) {
+    logger.error(error, `Failed to generate or save summary for lecture ${lectureId}`);
+  }
+});
+
 
 // Error handling
 app.use((err, _req, res, _next) => {
